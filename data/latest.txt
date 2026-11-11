@@ -1,22 +1,5 @@
 Bulletinset for METAREA 1
-Edition date (UTC): 2026-11-11 08:25:19
-============================
-HIGH SEAS WARNING
-============================
-WONT54 EGRR 110800
-
-SECURITE
-
-
-
-
-
-
-
-
-
-NO STORMS=
-
+Edition date (UTC): 2026-11-11 18:25:20
 ============================
 HIGH SEAS FORECAST
 ============================
