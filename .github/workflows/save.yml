@@ -28,8 +28,14 @@ jobs:
           TEMP_FILE="data/temp_download.txt"
           LATEST_FILE="data/latest.txt"
 
-          if ! curl -fsSL -A "Mozilla/5.0" "$TARGET_URL" -o "$TEMP_RAW"; then
-            echo "[-] Failed to fetch bulletin from wwmiws.wmo.int"
+          HTTP_STATUS=$(curl -sSL -w "%{http_code}" \
+            -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
+            -H "Accept: text/plain,text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" \
+            -H "Accept-Language: en-US,en;q=0.9" \
+            "$TARGET_URL" -o "$TEMP_RAW")
+
+          if [ "$HTTP_STATUS" -ne 200 ]; then
+            echo "[-] Failed to fetch bulletin (HTTP Status: $HTTP_STATUS)"
             rm -f "$TEMP_RAW"
             echo "has_update=false" >> "$GITHUB_OUTPUT"
             exit 0
@@ -38,8 +44,10 @@ jobs:
           tr -d '\r' < "$TEMP_RAW" > "$TEMP_FILE"
           rm -f "$TEMP_RAW"
 
-          if ! grep -q "FQNT21 EGRR" "$TEMP_FILE"; then
-            echo "[-] Warning: Downloaded file does not contain FQNT21 EGRR header."
+          if ! grep -E -q "FQNT21[[:space:]]+EGRR" "$TEMP_FILE"; then
+            echo "[-] Warning: Downloaded file does not contain 'FQNT21 EGRR' header."
+            echo "[-] First 15 lines of downloaded content:"
+            head -n 15 "$TEMP_FILE"
             rm -f "$TEMP_FILE"
             echo "has_update=false" >> "$GITHUB_OUTPUT"
             exit 0
