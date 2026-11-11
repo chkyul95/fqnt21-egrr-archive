@@ -1,0 +1,104 @@
+name: Archive FQNT21 EGRR Bulletin
+
+on:
+  schedule:
+    - cron: '25 */2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  archive-bulletin:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Fetch and Archive FQNT21 EGRR
+        id: process_bulletin
+        env:
+          IA_ACCESS_KEY: ${{ secrets.IA_ACCESS_KEY }}
+          IA_SECRET_KEY: ${{ secrets.IA_SECRET_KEY }}
+        run: |
+          TARGET_URL="https://wwmiws.wmo.int/index.php/metareas/bulletinset_download/1/txt"
+          
+          mkdir -p data
+          TEMP_RAW="data/raw.txt"
+          TEMP_FILE="data/temp_download.txt"
+          LATEST_FILE="data/latest.txt"
+
+          if ! curl -fsSL -A "Mozilla/5.0" "$TARGET_URL" -o "$TEMP_RAW"; then
+            echo "[-] Failed to fetch bulletin from wwmiws.wmo.int"
+            rm -f "$TEMP_RAW"
+            echo "has_update=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          tr -d '\r' < "$TEMP_RAW" > "$TEMP_FILE"
+          rm -f "$TEMP_RAW"
+
+          if ! grep -q "FQNT21 EGRR" "$TEMP_FILE"; then
+            echo "[-] Warning: Downloaded file does not contain FQNT21 EGRR header."
+            rm -f "$TEMP_FILE"
+            echo "has_update=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ -f "$LATEST_FILE" ] && cmp -s "$TEMP_FILE" "$LATEST_FILE"; then
+            echo "[-] No update detected. Bulletin has not changed."
+            rm -f "$TEMP_FILE"
+            echo "has_update=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "[+] New bulletin detected!"
+          YEAR=$(date -u +'%Y')
+          MONTH=$(date -u +'%m')
+          TIMESTAMP=$(date -u +'%Y%m%d_%H%M%S')
+          ARCHIVE_DIR="data/${YEAR}/${MONTH}"
+          mkdir -p "$ARCHIVE_DIR"
+
+          ARCHIVE_FILE="${ARCHIVE_DIR}/fqnt21_egrr_${TIMESTAMP}.txt"
+          mv "$TEMP_FILE" "$ARCHIVE_FILE"
+          cp "$ARCHIVE_FILE" "$LATEST_FILE"
+
+          if [ -n "$IA_ACCESS_KEY" ] && [ -n "$IA_SECRET_KEY" ]; then
+            echo "    Requesting Wayback Machine archive..."
+            for attempt in {1..3}; do
+              IA_RES=$(curl -sSL --max-time 60 -X POST "https://web.archive.org/save" \
+                -H "Accept: application/json" \
+                -H "Authorization: LOW ${IA_ACCESS_KEY}:${IA_SECRET_KEY}" \
+                --data-urlencode "url=${TARGET_URL}" \
+                -d "force_get=1" \
+                -d "skip_first_archive=1" || true)
+
+              if echo "$IA_RES" | grep -q -E "limit|active sessions|Reduce your request rate"; then
+                echo "    Rate limit detected, waiting 15s (attempt $attempt/3)..."
+                sleep 15
+              else
+                break
+              fi
+            done
+            echo "    Archive.org response: ${IA_RES}"
+          fi
+
+          echo "has_update=true" >> "$GITHUB_OUTPUT"
+          echo "timestamp=${TIMESTAMP}" >> "$GITHUB_OUTPUT"
+
+      - name: Commit and Push changes
+        if: steps.process_bulletin.outputs.has_update == 'true'
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          
+          git add data/
+          if git diff --staged --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+
+          TIMESTAMP="${{ steps.process_bulletin.outputs.timestamp }}"
+          git commit -m "Archive FQNT21 EGRR (${TIMESTAMP} UTC)"
+          git pull --rebase
+          git push
