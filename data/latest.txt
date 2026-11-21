@@ -1,24 +1,5 @@
 Bulletinset for METAREA 1
-Edition date (UTC): 2026-11-21 08:25:29
-============================
-HIGH SEAS WARNING
-============================
-WONT54 EGRR 210800
-
-SECURITE
-
-
-
-
-
-
-
-
-
-STORM WARNING
-
-NORTHEASTERLY WINDS WILL REACH STORM FORCE 10 IN THE WEST OF DENMARK STRAIT WITHIN 50 MILES FROM GREENLAND COAST UNTIL 211400UTC
-
+Edition date (UTC): 2026-11-21 18:25:27
 ============================
 HIGH SEAS FORECAST
 ============================
